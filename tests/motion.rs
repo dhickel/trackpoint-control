@@ -106,6 +106,7 @@ fn configuration_rejects_typos_types_nonfinite_and_out_of_range_values() {
         "[motion]\ngain=true",
         "[motion]\ninvert_x=1",
         "[motion]\ngian=1",
+        "[motion]\nrelease_correction=1",
         "[unrecognized]\nx=1",
     ] {
         assert!(toml::from_str::<Config>(text).is_err(), "{text}");
@@ -115,6 +116,11 @@ fn configuration_rejects_typos_types_nonfinite_and_out_of_range_values() {
         "[motion]\ndeadzone=-1",
         "[motion]\nidle_radius=5",
         "[motion]\ncurve=0",
+        "[motion]\nrelease_radius=nan",
+        "[motion]\nrelease_drop=0",
+        "[motion]\nrelease_ratio=1",
+        "[motion]\nrelease_settle_ms=0",
+        "[motion]\nrelease_noise=0",
     ] {
         let cfg: Config = toml::from_str(text).unwrap();
         assert!(cfg.motion.validate().is_err(), "{text}");

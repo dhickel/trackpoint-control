@@ -2,12 +2,13 @@
 
 An experimental Rust Linux driver that reads an Elan TrackPoint's sensor values
 before its automatic zero subtraction. The host controls the zero reference,
-dead zone, response curve, and thermal drift tracking. Holding a constant force
-outside the dead zone never makes that force the new zero.
+dead zone, response curve, and thermal drift tracking. With release correction
+disabled, a force outside the dead zone never becomes the new zero.
 
-**Version 0.2.0: native Rust rewrite of the physically tested 0.1.0 driver.**
-The motion calculations and defaults match the Python reference across 48,000
-test samples. The original movement and three-button behavior were verified on
+**Version 0.3.0: optional correction for drift after lifting the finger.**
+The new release detector is disabled by default; see its tuning and tradeoff
+below. With it disabled, motion calculations match the Python reference across
+48,000 test samples. The original movement and three-button behavior were verified on
 a ThinkPad T16 Gen 1 AMD. The implementation remains
 experimental and accepts only the controller profile below. The working
 transport delivers approximately **19–20 X/Y/button samples per second**;
@@ -101,6 +102,12 @@ global mouse settings are unchanged.
 | `idle_radius` | Thermal tracking is allowed only inside this stationary radius. Set 0 to disable it. |
 | `idle_seconds` | Time continuously within the stationary radius before tracking. |
 | `drift_tau_seconds` | Time constant for gradual zero adjustment. |
+| `release_correction` | Enable the optional rapid-unload detector described below; default false. |
+| `release_radius` | Maximum remaining force eligible for release correction, in sensor counts; default 16. |
+| `release_drop` | Minimum fall in force magnitude within 150 ms; default 12 counts. |
+| `release_ratio` | Remaining force must be at most this fraction of recent force; default 0.5. |
+| `release_settle_ms` | Time to suppress motion and check that a release candidate settles; default 300 ms. |
+| `release_noise` | Maximum distance of settling samples from their median; default 3 counts. |
 | `max_speed` | Cap the emitted velocity in relative counts per second. |
 | `invert_x`, `invert_y` | Axis direction. |
 
@@ -136,6 +143,41 @@ unchanged. Tracking still stops outside the dead zone and while a button is
 held. It cannot automatically recover a resting offset already outside that
 zone; use explicit calibration in that case. Tracking such an offset as idle
 would also risk treating a slow intentional hold as the new zero.
+
+### Drift after releasing the stick
+
+The sensor's neutral reading can shift after pressure and continue to relax
+after the finger lifts. If it stays outside `deadzone`, ordinary idle tracking
+cannot catch it. Version 0.3.0 adds optional release correction:
+
+```toml
+# Entries in the existing [motion] section; other motion tuning is retained.
+release_correction = true
+release_radius = 16.0
+release_drop = 12.0
+release_ratio = 0.5
+release_settle_ms = 300.0
+release_noise = 3.0
+idle_radius = 4.0
+idle_seconds = 1.0
+drift_tau_seconds = 3.0
+```
+
+After at least half a second of movement, a force drop meeting all three
+radius/drop/ratio conditions starts a candidate. Motion pauses for the settling
+interval. If readings stay near their median, that median becomes the new zero;
+ordinary idle tracking then follows small changes. Renewed pressure, excessive
+variation, a held button, or a long sampling pause cancels the candidate. A
+constant hold and a gradual pressure reduction cannot trigger the detector.
+Setting `release_correction = false` restores the original behavior.
+
+**This infers release; it does not sense finger contact.** A deliberate rapid
+change from strong pressure to a small steady force can look the same as
+release and can be paused or recalibrated. Smaller `release_radius` or
+`release_ratio`, or a larger `release_drop`, makes detection more restrictive
+but can miss real releases. Verify both deliberate movements and releases on
+your controller before enabling this at startup. Automatic corrections are
+logged as `release_corrected` in the service journal.
 
 ## Physical acceptance test
 
@@ -182,7 +224,10 @@ python3 release.py
 
 The tests cover long steady force, release, stationary noise, bounded thermal
 tracking, pauses, configuration validation, input event framing, and PS/2
-framing/reset recovery. `tests/parity.py` compares exact integer motion and
+framing/reset recovery. Release tests cover post-pressure offsets, a relaxing
+neutral reading, gradual pressure reduction, renewed motion, reversals outside
+the release region, buttons, unstable candidates, and pauses.
+`tests/parity.py` compares exact integer motion and
 floating-point state against the original implementation. The Python reference
 is retained under `reference/python/`; it is never installed or invoked by
 the Rust driver.

@@ -104,7 +104,8 @@ fn replay(path: &Path) -> Result<()> {
         let delta = motion.step(step.sample, step.dt, step.buttons);
         serde_json::to_writer(
             &mut out,
-            &json!({"delta":delta, "origin":motion.origin, "force":motion.filtered}),
+            &json!({"delta":delta, "origin":motion.origin, "force":motion.filtered,
+                "release_calibrations":motion.release_calibrations()}),
         )?;
         writeln!(out)?;
     }

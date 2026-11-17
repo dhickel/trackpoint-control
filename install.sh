@@ -45,7 +45,7 @@ fi
 # Validate the replacement and all source files before stopping working input.
 [[ -x "$binary" ]] || { echo 'Build first as your user: cargo build --release --locked' >&2; exit 1; }
 version=$("$binary" --version)
-[[ "$version" == 'trackpoint-control 0.2.0' ]] || { echo "Unexpected binary: $version" >&2; exit 1; }
+[[ "$version" == 'trackpoint-control 0.3.0' ]] || { echo "Unexpected binary: $version" >&2; exit 1; }
 for src_file in config.example.toml packaging/trackpoint-control.service packaging/trackpoint-control-recover.service; do
     [[ -f "$source_dir/$src_file" ]] || { echo "Missing source file: $src_file" >&2; exit 1; }
 done

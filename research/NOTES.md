@@ -141,6 +141,43 @@ Verification:
 This is a language/runtime change. It does not remove the PS/2 polling rate
 limit or establish new hardware profiles or suspend/resume support.
 
+## Release correction (0.3.0)
+
+A controlled slow-right-hold/release capture reproduced continued cursor
+movement with the finger lifted. Native readings after release differed from
+the earlier resting readings and continued changing over the following 30
+seconds. This establishes a post-pressure baseline problem; it does not by
+itself identify the physical mechanism inside the sensor. A four-count dead
+zone could not contain the measured offset. Ordinary idle tracking deliberately
+refuses to learn a force outside that zone.
+
+The optional release detector requires at least 0.5 seconds of motion, a large
+drop within 150 ms, and settled low-force readings. It then recalibrates to the
+median. It is disabled by default because there is no independent finger-contact
+signal: a deliberate rapid reduction to a small steady force can satisfy the
+same conditions. Its radius, drop, ratio, settling interval, and allowed noise
+are configurable. New pressure, held buttons, unstable samples, and long
+sampling pauses cancel a candidate.
+
+Replaying the locally recorded release with correction and the documented idle
+tuning reduced the post-release absolute output from 163 X / 283 Y counts to
+zero. This replay is separate from physical acceptance. New regression tests
+cover a relaxing neutral reading, five-minute slow holds, gradual force
+reduction, reversals outside the candidate region, renewed pressure, buttons,
+unstable candidates, and pauses. With correction disabled, the existing
+48,000-sample Python parity check still passes. Private sensor captures are not
+included in Git or the source archive.
+
+Physical acceptance on the same T16 controller then repeated a 20-second slow
+right hold and release with 0.3.0 installed and correction enabled. The driver
+logged an automatic release correction. From the measured unload until the end
+of the capture, 537 samples over 28.67 seconds emitted zero relative counts on
+both axes. The tester confirmed that movement and stopping felt correct. The
+pre-hold portion contained 3 X / 16 Y counts, so this verifies the reproduced
+hold/release case rather than proving all pressure transitions drift-free.
+All 25 Rust tests, strict Clippy, the release build, and Python parity pass.
+The installed executable matches the built binary; boot enablement is retained.
+
 ## Primary sources
 
 - [Linux trackpoint.c](https://github.com/torvalds/linux/blob/master/drivers/input/mouse/trackpoint.c)

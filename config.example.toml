@@ -8,6 +8,14 @@ smoothing_ms = 5.0
 idle_radius = 2.0
 idle_seconds = 5.0
 drift_tau_seconds = 30.0
+# Optional inference of finger release from a rapid unload followed by
+# settled readings. See README for the tradeoff and tested tuning.
+release_correction = false
+release_radius = 16.0
+release_drop = 12.0
+release_ratio = 0.5
+release_settle_ms = 300.0
+release_noise = 3.0
 max_speed = 1800.0
 invert_x = false
 invert_y = true

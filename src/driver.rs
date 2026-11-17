@@ -133,11 +133,15 @@ fn worker(node: &Path, options: &Options, mut heartbeat: File) -> Result<()> {
                 log(json!({"calibrated_origin":motion.origin}))?;
             }
         } else {
+            let previous_calibrations = motion.release_calibrations();
             delta = motion.step(
                 sample,
                 now.duration_since(previous).as_secs_f64(),
                 buttons as u8,
             );
+            if motion.release_calibrations() != previous_calibrations {
+                log(json!({"state":"release_corrected", "calibrated_origin":motion.origin}))?;
+            }
         }
         if let Some(pointer) = &mut pointer {
             pointer.emit(delta, buttons as u8)?;

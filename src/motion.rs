@@ -1,4 +1,5 @@
-//! The same force-to-velocity calculation and defaults as the tested Python driver.
+//! Force-to-velocity conversion with optional correction after inferred release.
+use crate::release::{Action, Release};
 use anyhow::{Result, ensure};
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +13,12 @@ pub struct Settings {
     pub idle_radius: f64,
     pub idle_seconds: f64,
     pub drift_tau_seconds: f64,
+    pub release_correction: bool,
+    pub release_radius: f64,
+    pub release_drop: f64,
+    pub release_ratio: f64,
+    pub release_settle_ms: f64,
+    pub release_noise: f64,
     pub max_speed: f64,
     pub invert_x: bool,
     pub invert_y: bool,
@@ -27,6 +34,12 @@ impl Default for Settings {
             idle_radius: 2.0,
             idle_seconds: 5.0,
             drift_tau_seconds: 30.0,
+            release_correction: false,
+            release_radius: 16.0,
+            release_drop: 12.0,
+            release_ratio: 0.5,
+            release_settle_ms: 300.0,
+            release_noise: 3.0,
             max_speed: 1800.0,
             invert_x: false,
             invert_y: true,
@@ -44,6 +57,11 @@ impl Settings {
             ("idle_radius", self.idle_radius, 0.0, 100.0),
             ("idle_seconds", self.idle_seconds, 1.0, 3600.0),
             ("drift_tau_seconds", self.drift_tau_seconds, 1.0, 86400.0),
+            ("release_radius", self.release_radius, 0.0, 100.0),
+            ("release_drop", self.release_drop, 1.0, 100.0),
+            ("release_ratio", self.release_ratio, 0.05, 0.75),
+            ("release_settle_ms", self.release_settle_ms, 100.0, 2000.0),
+            ("release_noise", self.release_noise, 0.1, 10.0),
             ("max_speed", self.max_speed, 1.0, 10000.0),
         ] {
             ensure!(
@@ -70,6 +88,8 @@ pub struct Motion {
     pub filtered: [f64; 2],
     remainder: [f64; 2],
     idle_elapsed: f64,
+    release: Release,
+    release_calibrations: u64,
     settings: Settings,
 }
 
@@ -85,6 +105,8 @@ impl Motion {
             filtered: [0.0; 2],
             remainder: [0.0; 2],
             idle_elapsed: 0.0,
+            release: Release::default(),
+            release_calibrations: 0,
             settings,
         })
     }
@@ -94,6 +116,11 @@ impl Motion {
         self.filtered = [0.0; 2];
         self.remainder = [0.0; 2];
         self.idle_elapsed = 0.0;
+        self.release = Release::default();
+    }
+
+    pub fn release_calibrations(&self) -> u64 {
+        self.release_calibrations
     }
 
     pub fn step(&mut self, sample: [f64; 2], dt: f64, buttons: u8) -> [i32; 2] {
@@ -101,6 +128,7 @@ impl Motion {
             self.remainder = [0.0; 2];
             self.filtered = [0.0; 2];
             self.idle_elapsed = 0.0;
+            self.release = Release::default();
             return [0; 2];
         }
         let cfg = &self.settings;
@@ -114,6 +142,21 @@ impl Motion {
             self.filtered[i] += alpha * (force - self.filtered[i]);
         }
         let distance = self.filtered[0].hypot(self.filtered[1]);
+        if cfg.release_correction {
+            match self.release.step(sample, distance, dt, buttons, cfg) {
+                Action::Continue => (),
+                Action::Hold => {
+                    self.remainder = [0.0; 2];
+                    self.idle_elapsed = 0.0;
+                    return [0; 2];
+                }
+                Action::Calibrate(center) => {
+                    self.calibrate(center);
+                    self.release_calibrations = self.release_calibrations.saturating_add(1);
+                    return [0; 2];
+                }
+            }
+        }
         if cfg.idle_radius > 0.0 && distance <= cfg.idle_radius && buttons == 0 {
             self.idle_elapsed += dt;
             if self.idle_elapsed >= cfg.idle_seconds {
