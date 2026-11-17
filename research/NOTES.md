@@ -102,6 +102,13 @@ T16. It was extracted for comparison only. **No firmware was flashed.**
 - Large thermal or mechanical changes may still require explicit calibration.
   The software does not claim to distinguish every sensor bias change from
   an intentional steady force. Suspend/resume remains untested physically.
+- The final installed service emitted zero relative counts and zero button
+  events during a 25.03-second hands-off check. This is a bounded resting test,
+  not proof against every temperature condition.
+- Uninstall/reinstall removed the owned executable and units, preserved the
+  configuration, and kept stock input working. Installed Python sources
+  matched the release. The archive's contents and extracted entry points were
+  checked, and both systemd units passed `systemd-analyze verify`.
 
 ## Primary sources
 
