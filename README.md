@@ -116,6 +116,27 @@ has moved beyond the dead zone:
 sudo trackpoint-control calibrate
 ```
 
+If the pointer creeps with the stick fully released, recalibrate first. Keep
+your finger off the stick throughout the collection: pressure during startup
+or explicit calibration can become part of the zero reference.
+
+For a `deadzone` of 4, the following idle tuning lets thermal tracking use the
+whole dead zone and follow small changes sooner:
+
+```toml
+# Change these entries in the existing [motion] section.
+idle_radius = 4.0
+idle_seconds = 2.0
+drift_tau_seconds = 10.0
+```
+
+Restart the service with the stick released for its first two seconds. This
+tuning leaves the movement threshold, gain, response curve, and smoothing
+unchanged. Tracking still stops outside the dead zone and while a button is
+held. It cannot automatically recover a resting offset already outside that
+zone; use explicit calibration in that case. Tracking such an offset as idle
+would also risk treating a slow intentional hold as the new zero.
+
 ## Physical acceptance test
 
 1. Start a bounded trial with your hand off the stick for its two-second zero.
