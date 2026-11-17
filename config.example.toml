@@ -1,0 +1,13 @@
+[motion]
+# Sensor counts, before the controller's automatic zero subtraction.
+deadzone = 4.0
+gain = 1.0
+curve = 1.2
+smoothing_ms = 5.0
+# Tracking only occurs inside this stationary region. 0 disables tracking.
+idle_radius = 2.0
+idle_seconds = 5.0
+drift_tau_seconds = 30.0
+max_speed = 1800.0
+invert_x = false
+invert_y = true

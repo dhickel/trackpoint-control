@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+diagnostics/
+research/*.bin
+research/*.b64
+research/*.exe
+research/*.pdf
+research/*.asm
+research/disassemble
+research/windows/
+research/fw2022/
+research/*.html
+research/*.txt
+dist/

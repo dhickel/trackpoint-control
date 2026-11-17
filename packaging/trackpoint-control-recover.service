@@ -1,0 +1,9 @@
+[Unit]
+Description=Restore the stock TrackPoint after an abnormal driver exit
+After=trackpoint-control.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/trackpoint-control restore
+TimeoutStartSec=15
+UMask=0022

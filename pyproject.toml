@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trackpoint-control"
+version = "0.1.0"
+description = "Experimental Elan raw-sensor TrackPoint driver with host-controlled calibration"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "Dwight Hickel"}]
+
+[project.scripts]
+trackpoint-control = "trackpoint_control.__main__:main"
+
+[tool.setuptools]
+packages = ["trackpoint_control"]

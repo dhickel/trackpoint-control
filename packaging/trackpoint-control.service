@@ -1,0 +1,17 @@
+[Unit]
+Description=Elan TrackPoint raw sensor driver
+After=systemd-udevd.service
+OnFailure=trackpoint-control-recover.service
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/modprobe uinput
+ExecStart=/usr/local/bin/trackpoint-control run --config /etc/trackpoint-control.toml
+ExecStopPost=/usr/local/bin/trackpoint-control restore
+KillMode=control-group
+TimeoutStopSec=8
+Restart=no
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target
