@@ -8,9 +8,9 @@ disabled, a force outside the dead zone never becomes the new zero.
 **Version 0.3.0: optional correction for drift after lifting the finger.**
 The new release detector is disabled by default; see its tuning and tradeoff
 below. With it disabled, motion calculations match the Python reference across
-48,000 test samples. The original movement and three-button behavior were verified on
-a ThinkPad T16 Gen 1 AMD. The implementation remains
-experimental and accepts only the controller profile below. The working
+48,000 test samples. Movement and three-button behavior were verified on a
+ThinkPad T16 Gen 1 AMD. The implementation remains experimental and accepts only
+the controller profile below. The working
 transport delivers approximately **19–20 X/Y/button samples per second**;
 this is a practical latency limit of this version. Ordinary button clicks
 worked, but events shorter than a polling interval can be missed. The Rust port
@@ -57,6 +57,8 @@ Build with Rust/Cargo 1.85 or newer. The installed driver is a native executable
 Python and Cargo are not needed to run it. Only x86_64 has been hardware-tested.
 
 ```sh
+git clone https://github.com/dhickel/trackpoint-control.git
+cd trackpoint-control
 cargo build --release --locked
 sudo bash install.sh
 # Keep your hand off the stick during the first two seconds.
@@ -64,20 +66,25 @@ sudo trackpoint-control trial --seconds 120 --enable-pointer \
     --config /etc/trackpoint-control.toml
 ```
 
+For an extracted source archive, run the build and install commands from its
+directory. Fresh installations leave release correction disabled. To try the
+post-release drift fix, edit `/etc/trackpoint-control.toml` using the
+[tested configuration below](#drift-after-releasing-the-stick), then run the
+bounded trial with that configuration.
+
 The bounded trial restores the stock driver automatically. Ctrl+C also stops
 it. Installation itself leaves the service stopped and does not newly enable
 it at boot. Without `--enable-pointer`, a trial observes only and the TrackPoint
-does not move the cursor during the capture. An upgrade from Python 0.1 stops
-the old service, restores its hardware lease, replaces the executable, and
-preserves `/etc/trackpoint-control.toml` and boot enablement. Restart the service
-after an upgrade. The old `sudo python3 install.py` command remains a compatibility
-entry point, but `install.sh` requires no Python.
+does not move the cursor during the capture. The old `sudo python3 install.py`
+command remains a compatibility entry point, but `install.sh` requires no Python.
+
+After the trial, start the service and inspect its status:
 
 ```sh
+# Keep your hand off the stick during the first two seconds.
 sudo systemctl start trackpoint-control
-sudo systemctl stop trackpoint-control
 trackpoint-control status
-journalctl -u trackpoint-control
+journalctl -u trackpoint-control -n 20 --no-pager
 ```
 
 After validating your hardware, `sudo systemctl enable trackpoint-control`
@@ -85,6 +92,25 @@ enables startup at boot. Suspend/resume has not been physically validated.
 If resume or a protocol error stops
 the service, it falls back to the stock driver; restart it explicitly to try
 again.
+
+### Upgrade an existing installation
+
+From the repository directory:
+
+```sh
+git pull --ff-only
+cargo build --release --locked
+sudo bash install.sh
+# Keep your hand off the stick during the first two seconds.
+sudo systemctl start trackpoint-control
+```
+
+The installer stops an existing Python or Rust service, restores its hardware
+lease, and replaces the executable and service units. It preserves
+`/etc/trackpoint-control.toml` and boot enablement. New settings omitted from an
+older configuration use their defaults, so upgrading alone does not enable
+release correction. Set `release_correction = true` and the associated tuning
+below to opt in, then restart the service or run a bounded trial.
 
 ## Tune
 
@@ -148,19 +174,39 @@ would also risk treating a slow intentional hold as the new zero.
 
 The sensor's neutral reading can shift after pressure and continue to relax
 after the finger lifts. If it stays outside `deadzone`, ordinary idle tracking
-cannot catch it. Version 0.3.0 adds optional release correction:
+cannot catch it. Version 0.3.0 adds optional release correction.
+
+This complete configuration was used in the successful T16 hold/release test.
+For an existing setup, update its release and idle settings while retaining
+your preferred gain, response curve, and axis directions:
 
 ```toml
-# Entries in the existing [motion] section; other motion tuning is retained.
+[motion]
+deadzone = 4.0
+gain = 1.0
+curve = 1.2
+smoothing_ms = 5.0
+idle_radius = 4.0
+idle_seconds = 1.0
+drift_tau_seconds = 3.0
+max_speed = 1800.0
+invert_x = false
+invert_y = true
+
 release_correction = true
 release_radius = 16.0
 release_drop = 12.0
 release_ratio = 0.5
 release_settle_ms = 300.0
 release_noise = 3.0
-idle_radius = 4.0
-idle_seconds = 1.0
-drift_tau_seconds = 3.0
+```
+
+Edit the existing `[motion]` section rather than appending duplicate entries.
+Restart the service with the stick released for its first two seconds to apply
+the settings:
+
+```sh
+sudo systemctl restart trackpoint-control
 ```
 
 After at least half a second of movement, a force drop meeting all three
@@ -168,8 +214,8 @@ radius/drop/ratio conditions starts a candidate. Motion pauses for the settling
 interval. If readings stay near their median, that median becomes the new zero;
 ordinary idle tracking then follows small changes. Renewed pressure, excessive
 variation, a held button, or a long sampling pause cancels the candidate. A
-constant hold and a gradual pressure reduction cannot trigger the detector.
-Setting `release_correction = false` restores the original behavior.
+steady reading cannot start a candidate without the preceding rapid drop.
+Setting `release_correction = false` and restarting disables this detector.
 
 **This infers release; it does not sense finger contact.** A deliberate rapid
 change from strong pressure to a small steady force can look the same as
@@ -179,6 +225,20 @@ but can miss real releases. Verify both deliberate movements and releases on
 your controller before enabling this at startup. Automatic corrections are
 logged as `release_corrected` in the service journal.
 
+## Verified results
+
+Version 0.3.0 passes 25 Rust tests, Clippy with warnings denied, and the locked
+release build. With release correction disabled, 48,000 replay samples match
+the Python reference's integer motion exactly.
+
+On the tested T16, a controlled 20-second slow right hold followed by release
+produced **zero X/Y motion across 537 samples over the next 28.67 seconds**.
+The tester confirmed normal movement and stopping. The pre-hold portion still
+contained 3 X / 16 Y counts, so this validates the reproduced hold/release case;
+it does not establish drift-free behavior for every gesture or temperature.
+See [the investigation notes](research/NOTES.md#release-correction-030) for the
+capture scope and the distinction between replay and physical testing.
+
 ## Physical acceptance test
 
 1. Start a bounded trial with your hand off the stick for its two-second zero.
@@ -187,8 +247,11 @@ logged as `release_corrected` in the service journal.
    the same direction instead of slowing, stopping, or reversing after five
    seconds.
 4. Release the stick. There should be no opposite-direction movement.
-5. Leave it untouched for several minutes to check thermal drift and noise.
-6. Stop the trial and confirm the stock TrackPoint works again.
+5. With release correction enabled, also try gradual pressure reductions,
+   reversals, and rapid changes from firm to light pressure. Check for unwanted
+   pauses or recalibration during deliberate movement.
+6. Leave it untouched for several minutes to check thermal drift and noise.
+7. Stop the trial and confirm the stock TrackPoint works again.
 
 The physical steps cannot be established by synthetic input tests. Log a
 trial with `--record /path/to/samples.jsonl` to compare raw measurements and
