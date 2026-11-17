@@ -7,14 +7,14 @@ import signal
 import subprocess
 import sys
 import time
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "reference/python"))
 from trackpoint_control.hardware import Lease
 from trackpoint_control.wire import Wire
 
 
 log_path = Path('diagnostics/recovery-check-driver.jsonl')
 with log_path.open('w') as out:
-    p = subprocess.Popen([sys.executable, '-m', 'trackpoint_control', 'trial', '--seconds', '60'],
+    p = subprocess.Popen([str(Path('target/release/trackpoint-control').resolve()), 'trial', '--seconds', '60'],
                          stdout=out, stderr=subprocess.STDOUT)
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:

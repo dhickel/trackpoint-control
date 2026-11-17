@@ -143,7 +143,7 @@ def main(operation=run_probe, timeout=20):
         # Parent owns restoration even if the probe child crashes or times out.
         # rescan uses driver-core probing and recreates psmouse's attribute groups;
         # explicitly binding via drvctl skips those generic groups on some kernels.
-        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "reference/python"))
         from trackpoint_control.hardware import restore
         restore({'port': port.name, 'physical_path': str(port), 'settings': saved})
         log(restored_driver=(port / "driver").resolve().name,

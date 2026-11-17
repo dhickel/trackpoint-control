@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import time
 from probe import log, main
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "reference/python"))
 from trackpoint_control.wire import Wire
 from trackpoint_control.driver import identify
 

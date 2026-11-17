@@ -4,6 +4,6 @@ After=trackpoint-control.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/trackpoint-control restore
+ExecStart=/usr/local/bin/trackpoint-control restore --wait-seconds 5
 TimeoutStartSec=15
 UMask=0022

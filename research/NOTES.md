@@ -110,6 +110,37 @@ T16. It was extracted for comparison only. **No firmware was flashed.**
   matched the release. The archive's contents and extracted entry points were
   checked, and both systemd units passed `systemd-analyze verify`.
 
+## Rust port (0.2.0)
+
+The driver, transport, uinput device, calibration, configuration parsing, and
+supervisor were rewritten in Rust. The original Python code lives under
+`reference/python/` for comparisons and research helpers; the installed driver
+and shell installer require no Python. Existing TOML settings, commands,
+virtual-device identity, controller profile, and lease JSON are retained.
+
+Verification:
+
+- 16 Rust tests pass, covering motion, configuration, event encoding, protocol
+  framing/reset, recovery state validation, and bounded lock acquisition.
+- 48,000 deterministic samples match the Python implementation's integer
+  motion exactly; origin/filter states agree within 1e-9.
+- On the actual controller, the Rust binary created the pointer, accepted a
+  pidfd-delivered recalibration signal, and rejected concurrent ownership.
+- Normal completion, Ctrl+C, SIGKILL of the worker, and a SIGSTOP-stalled
+  worker all restored stock input and the saved attributes.
+- Faster recovery startup exposed a process-exit race: systemd's OnFailure
+  unit could run before the killed worker released its flock. Recovery now
+  waits up to five seconds for that lock. Repeating whole-process-group
+  SIGKILL then restored stock input with recovery result success.
+- Python-to-Rust installation, Rust uninstall/reinstall, and byte-for-byte
+  configuration preservation were checked. The installed executable matches
+  the release ELF binary, and boot enablement is preserved.
+- Formatting, Clippy with warnings denied, Cargo's locked release build, and
+  extracted source archive metadata/installer checks pass.
+
+This is a language/runtime change. It does not remove the PS/2 polling rate
+limit or establish new hardware profiles or suspend/resume support.
+
 ## Primary sources
 
 - [Linux trackpoint.c](https://github.com/torvalds/linux/blob/master/drivers/input/mouse/trackpoint.c)
@@ -121,6 +152,9 @@ T16. It was extracted for comparison only. **No firmware was flashed.**
 - [Lenovo n2hg705w readme](https://download.lenovo.com/pccbbs/mobiles/n2hg705w.txt)
 - [Lenovo package page](https://pcsupport.lenovo.com/us/en/downloads/ds545434-elan-trackpoint-firmware-update-utility-for-windows-10-64-bit-thinkpad)
 - [libinput pointer acceleration](https://wayland.freedesktop.org/libinput/doc/latest/pointer-acceleration.html)
+- [Linux uinput ABI](https://docs.kernel.org/input/uinput.html)
+- [Linux flock semantics](https://man7.org/linux/man-pages/man2/flock.2.html)
+- [Rust owned and borrowed file descriptors](https://doc.rust-lang.org/std/os/unix/io/index.html)
 
 The research helpers are bounded experiments, not a public configuration API.
 Downloaded vendor binaries and disassemblies stay outside version control.

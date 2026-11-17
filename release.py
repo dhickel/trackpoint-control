@@ -4,17 +4,20 @@ import gzip
 import hashlib
 from pathlib import Path
 import tarfile
-from trackpoint_control import __version__
+import tomllib
 
 root = Path(__file__).resolve().parent
-name = f'trackpoint-control-{__version__}'
+version = tomllib.loads((root / 'Cargo.toml').read_text())['package']['version']
+name = f'trackpoint-control-{version}'
 paths = [root / p for p in (
-    'README.md', 'LICENSE', '.gitignore', 'pyproject.toml', 'config.example.toml',
-    'install.py', 'release.py', 'research/NOTES.md', 'research/MAME-LICENSE',
+    'README.md', 'LICENSE', '.gitignore', 'Cargo.toml', 'Cargo.lock', 'config.example.toml',
+    'install.sh', 'install.py', 'release.py', 'research/NOTES.md', 'research/MAME-LICENSE',
     'research/edspdasm.cpp', 'research/edspdasm.h', 'research/emu.h',
     'research/disassemble.cpp',
 )]
-for directory, suffix in (('trackpoint_control', '*.py'), ('tests', '*.py'),
+for directory, suffix in (('src', '*.rs'), ('tests', '*.rs'), ('tests', '*.py'),
+                          ('reference/python/trackpoint_control', '*.py'),
+                          ('reference/python/tests', '*.py'),
                           ('packaging', '*.service'), ('research', '*.py')):
     paths.extend(sorted((root / directory).glob(suffix)))
 out = root / 'dist'

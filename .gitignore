@@ -13,3 +13,4 @@ research/fw2022/
 research/*.html
 research/*.txt
 dist/
+/target/

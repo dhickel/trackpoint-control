@@ -1,17 +1,19 @@
 # TrackPoint Control
 
-An experimental Linux driver that reads an Elan TrackPoint's sensor values
+An experimental Rust Linux driver that reads an Elan TrackPoint's sensor values
 before its automatic zero subtraction. The host controls the zero reference,
 dead zone, response curve, and thermal drift tracking. Holding a constant force
 outside the dead zone never makes that force the new zero.
 
-**Version 0.1.0: physically tested on a ThinkPad T16 Gen 1 AMD.** Movement and
-all three buttons have been verified. After reducing speed and smoothing, the
-tester reported that operation felt good. The implementation remains
+**Version 0.2.0: native Rust rewrite of the physically tested 0.1.0 driver.**
+The motion calculations and defaults match the Python reference across 48,000
+test samples. The original movement and three-button behavior were verified on
+a ThinkPad T16 Gen 1 AMD. The implementation remains
 experimental and accepts only the controller profile below. The working
 transport delivers approximately **19–20 X/Y/button samples per second**;
 this is a practical latency limit of this version. Ordinary button clicks
-worked, but events shorter than a polling interval can be missed.
+worked, but events shorter than a polling interval can be missed. The Rust port
+does not change that hardware transport limit.
 
 ## What it changes
 
@@ -49,11 +51,13 @@ profile. The firmware origins are not followed after startup calibration.
 
 ## Install and try
 
-Requires Linux with `serio_raw`, `uinput`, systemd, and Python 3.11 or newer.
-There are no Python package dependencies and no custom kernel module.
+Requires 64-bit Linux (x86_64 or aarch64), `serio_raw`, `uinput`, and systemd.
+Build with Rust/Cargo 1.85 or newer. The installed driver is a native executable;
+Python and Cargo are not needed to run it. Only x86_64 has been hardware-tested.
 
 ```sh
-sudo python3 install.py
+cargo build --release --locked
+sudo bash install.sh
 # Keep your hand off the stick during the first two seconds.
 sudo trackpoint-control trial --seconds 120 --enable-pointer \
     --config /etc/trackpoint-control.toml
@@ -62,7 +66,11 @@ sudo trackpoint-control trial --seconds 120 --enable-pointer \
 The bounded trial restores the stock driver automatically. Ctrl+C also stops
 it. Installation itself leaves the service stopped and does not newly enable
 it at boot. Without `--enable-pointer`, a trial observes only and the TrackPoint
-does not move the cursor during the capture.
+does not move the cursor during the capture. An upgrade from Python 0.1 stops
+the old service, restores its hardware lease, replaces the executable, and
+preserves `/etc/trackpoint-control.toml` and boot enablement. Restart the service
+after an upgrade. The old `sudo python3 install.py` command remains a compatibility
+entry point, but `install.sh` requires no Python.
 
 ```sh
 sudo systemctl start trackpoint-control
@@ -128,31 +136,58 @@ keyboard input.
 
 ```sh
 sudo systemctl stop trackpoint-control
-sudo python3 install.py --uninstall
+sudo bash install.sh --uninstall
 ```
 
 Uninstall keeps your configuration file. If a manually launched process group
 was forcibly killed, run `sudo trackpoint-control restore` before uninstalling.
 The systemd unit does this through `ExecStopPost` and an independent failure
 recovery unit, which can survive a kill of the main service's entire process
-group. Recovery refuses to interfere while a live worker holds the device lock.
-A reboot also returns to
-the stock driver when the service is disabled at boot.
+group. The separate recovery unit waits up to five seconds for an exiting
+worker to release its lock; it never steals a live lock. Interactive `restore`
+fails immediately on contention unless `--wait-seconds` is explicitly supplied.
+A reboot also returns to the stock driver when the service is disabled at boot.
 
 ## Development
 
 ```sh
-python3 -m unittest discover -s tests -v
+cargo test --locked
+cargo clippy --all-targets --locked -- -D warnings
+cargo build --release --locked
+# Optional development checks; Python 3.11+ is used only for these scripts.
+python3 tests/parity.py
 python3 release.py
 ```
 
 The tests cover long steady force, release, stationary noise, bounded thermal
-tracking, pauses, configuration validation, and PS/2 framing. Hardware research
-and primary sources are described in [research/NOTES.md](research/NOTES.md).
+tracking, pauses, configuration validation, input event framing, and PS/2
+framing/reset recovery. `tests/parity.py` compares exact integer motion and
+floating-point state against the original implementation. The Python reference
+is retained under `reference/python/`; it is never installed or invoked by
+the Rust driver.
+
+Explicit hardware acceptance (root required, temporarily interrupts the
+TrackPoint and restores the previously running service afterward):
+
+```sh
+sudo python3 tests/hardware.py --hardware
+```
+
+This exercises virtual input, calibration, exclusive ownership, normal exit,
+Ctrl+C, a killed worker, and a stalled worker. Research and primary sources
+are described in [research/NOTES.md](research/NOTES.md).
 Downloaded proprietary firmware and private diagnostics are excluded from the
 release archive and Git. `release.py` uses an explicit file allowlist and writes
 a source archive and SHA-256 checksum to `dist/`. Share the archive or publish
-the repository after review; the installer works from an extracted archive.
+the repository after review; build and install from an extracted archive.
+
+The supervisor and worker remain separate processes. The Rust implementation
+keeps the shared device lock across `fork`, bounds protocol waits, and restores
+the stock driver only after the worker has exited. Calibration uses a process
+start-time check and `pidfd` to avoid signaling a reused PID. Linux FFI is
+restricted to documented syscall/ioctl boundaries; descriptors have owned Rust
+lifetimes. The installed service does not retain movement recordings unless
+explicitly started with `--record`.
 
 MIT license for this project; the research disassembler retains its upstream
 BSD-3-Clause license.
